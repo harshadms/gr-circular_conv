@@ -33,6 +33,11 @@ endif()
 
 # Make sure our local CMake Modules path comes first
 list(INSERT CMAKE_MODULE_PATH 0 ${PROJECT_SOURCE_DIR}/cmake/Modules)
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake /home/harshad/Tools/sdr_utils/gnss-sdr/cmake)
+
+#set(VolkGnsssdr_DIR /home/harshad/Tools/sdr_utils/gnss-sdr/cmake/Modules)
+
 # Find gnuradio to get access to the cmake modules
 find_package(Gnuradio "3.10" REQUIRED)
 
@@ -104,6 +109,13 @@ endif(APPLE)
 # Find gnuradio build dependencies
 ########################################################################
 find_package(Doxygen)
+find_package(Volk)
+find_package(VOLKGNSSSDR)
+find_package(Boost)
+find_package(MATIO)
+find_package(Armadillo)
+
+include_directories( ${Boost_INCLUDE_DIRS} )
 
 ########################################################################
 # Setup doxygen option

@@ -21,6 +21,7 @@ namespace py = pybind11;
 // Please do not delete
 /**************************************/
 // BINDING_FUNCTION_PROTOTYPES(
+    void bind_circular_conv(py::module& m);
 // ) END BINDING_FUNCTION_PROTOTYPES
 
 
@@ -49,5 +50,6 @@ PYBIND11_MODULE(circular_conv_python, m)
     // Please do not delete
     /**************************************/
     // BINDING_FUNCTION_CALLS(
+    bind_circular_conv(m);
     // ) END BINDING_FUNCTION_CALLS
 }

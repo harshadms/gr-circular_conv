@@ -9,4 +9,5 @@
 ########################################################################
 # Install public header files
 ########################################################################
-install(FILES api.h DESTINATION include/gnuradio/circular_conv)
+install(FILES api.h
+    circular_conv.h DESTINATION include/gnuradio/circular_conv)

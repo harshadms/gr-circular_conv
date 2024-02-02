@@ -11,7 +11,8 @@
 ########################################################################
 include(GrPlatform) #define LIB_SUFFIX
 
-list(APPEND circular_conv_sources)
+list(APPEND circular_conv_sources
+    circular_conv_impl.cc)
 
 set(circular_conv_sources
     "${circular_conv_sources}"
@@ -22,7 +23,8 @@ if(NOT circular_conv_sources)
 endif(NOT circular_conv_sources)
 
 add_library(gnuradio-circular_conv SHARED ${circular_conv_sources})
-target_link_libraries(gnuradio-circular_conv gnuradio::gnuradio-runtime)
+
+target_link_libraries(gnuradio-circular_conv gnuradio::gnuradio-runtime gnuradio-blocks gnuradio-fft volk armadillo matio volk_gnsssdr ${Boost_LIBRARIES})
 target_include_directories(
     gnuradio-circular_conv
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>

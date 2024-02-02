@@ -6,4 +6,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-install(FILES DESTINATION share/gnuradio/grc/blocks)
+install(FILES
+    circular_conv_circular_conv.block.yml DESTINATION share/gnuradio/grc/blocks)

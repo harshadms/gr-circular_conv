@@ -24,7 +24,8 @@ include(GrPybind)
 # Python Bindings
 ########################################################################
 
-list(APPEND circular_conv_python_files python_bindings.cc)
+list(APPEND circular_conv_python_files
+    circular_conv_python.cc python_bindings.cc)
 
 gr_pybind_make_oot(circular_conv ../../.. gr::circular_conv "${circular_conv_python_files}")
 
