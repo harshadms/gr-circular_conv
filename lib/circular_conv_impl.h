@@ -12,6 +12,9 @@
 #include <gnuradio/thread/thread.h>
 #include <volk/volk.h>
 #include <volk_gnsssdr/volk_gnsssdr.h>
+#include <volk_gnsssdr/volk_gnsssdr_alloc.h>  // for volk_gnsssdr::vector
+#include <gnuradio/fft/fft.h>
+
 #include <numeric>
 #include <armadillo>
 #include <fstream>
@@ -22,6 +25,23 @@ namespace circular_conv {
 //using fft_complex_fwd = gr::fft::fft; // fft::fft_complex_fwd;
 //using fft_complex_rev = gr::fft::fft; // fft::fft_complex_rev;
 using namespace std;
+
+using gnss_fft_complex_fwd = gr::fft::fft_complex_fwd;
+using gnss_fft_complex_rev = gr::fft::fft_complex_rev;
+template <typename T>
+using gnss_fft_fwd_unique_ptr = std::unique_ptr<T>;
+template <typename... Args>
+gnss_fft_fwd_unique_ptr<gr::fft::fft_complex_fwd> gnss_fft_fwd_make_unique(Args&&... args)
+{
+    return std::make_unique<gr::fft::fft_complex_fwd>(std::forward<Args>(args)...);
+}
+template <typename T>
+using gnss_fft_rev_unique_ptr = std::unique_ptr<T>;
+template <typename... Args>
+gnss_fft_rev_unique_ptr<gr::fft::fft_complex_rev> gnss_fft_rev_make_unique(Args&&... args)
+{
+    return std::make_unique<gr::fft::fft_complex_rev>(std::forward<Args>(args)...);
+}
 
 class circular_conv_impl : public circular_conv
 {
@@ -62,17 +82,29 @@ private:
     uint64_t d_acq_samplestamp;
     uint64_t d_sample_counter;
 
-    vector<float> d_tmp_buffer;
-    vector<gr_complex> d_fft_codes;
-    vector<gr_complex> d_input_signal;
-    vector<gr_complex> d_data_buffer;
-    vector<vector<gr_complex>> d_grid_doppler_wipeoffs;
-    vector<vector<float>> d_magnitude_grid;
+    // volk_gnssdr::vector<float> d_tmp_buffer;
+    // volk_gnssdr::vector<gr_complex> d_fft_codes;
+    // volk_gnssdr::vector<gr_complex> d_input_signal;
+    // volk_gnssdr::vector<gr_complex> d_data_buffer;
+    // volk_gnssdr::vector<vector<gr_complex>> d_grid_doppler_wipeoffs;
+    // volk_gnssdr::vector<vector<float>> d_magnitude_grid;
+
+    volk_gnsssdr::vector<volk_gnsssdr::vector<float>> d_magnitude_grid;
+    volk_gnsssdr::vector<float> d_tmp_buffer;
+    volk_gnsssdr::vector<std::complex<float>> d_input_signal;
+    volk_gnsssdr::vector<volk_gnsssdr::vector<std::complex<float>>> d_grid_doppler_wipeoffs;
+    volk_gnsssdr::vector<volk_gnsssdr::vector<std::complex<float>>> d_grid_doppler_wipeoffs_step_two;
+    volk_gnsssdr::vector<std::complex<float>> d_fft_codes;
+    volk_gnsssdr::vector<std::complex<float>> d_data_buffer;
+    volk_gnsssdr::vector<lv_16sc_t> d_data_buffer_sc;
 
     gr_complex *code_copy;
 
-    gr::fft::fft_complex_fwd *d_fft_if;
-    gr::fft::fft_complex_rev *d_ifft;
+    // gr::fft::fft_complex_fwd *d_fft_if;
+    // gr::fft::fft_complex_rev *d_ifft;
+    
+    std::unique_ptr<gnss_fft_complex_fwd> d_fft_if;
+    std::unique_ptr<gnss_fft_complex_rev> d_ifft;
 
     void generate_sampled_code_fc(gr_complex *dest, int prn);
     void gold_code_gen(int *ca, int prn, int code_len);

@@ -26,14 +26,13 @@ circular_conv::sptr circular_conv::make(int code_id, int peak_algo, int code_len
     return gnuradio::make_block_sptr<circular_conv_impl>(code_id, peak_algo, code_len, samp_rate, chip_rate, fft_size, freq_step, freq_start, freq_stop, pfa);
 }
 
-
 /*
  * The private constructor
  */
 circular_conv_impl::circular_conv_impl(int code_id, int peak_algo, int code_len, float samp_rate, float chip_rate, uint32_t fft_size, float freq_step, float freq_start, float freq_stop, float pfa)
     : gr::sync_block("circular_conv",
                      gr::io_signature::make(
-                         1 /* min inputs */, 1 /* max inputs */, sizeof(input_type)),
+                         1 /* min inputs */, 1 /* max inputs */, sizeof(input_type)*512),
                      gr::io_signature::make(
                          1 /* min outputs */, 1 /*max outputs */, sizeof(output_type)))
 {
@@ -55,12 +54,15 @@ circular_conv_impl::circular_conv_impl(int code_id, int peak_algo, int code_len,
 
     code_copy = (gr_complex*)(d_samp_per_code * sizeof(gr_complex));
 
-    d_tmp_buffer = vector<float>(d_fft_size);
-    d_fft_codes = vector<gr_complex>(d_fft_size);
-    d_input_signal = vector<gr_complex>(d_fft_size);
+    d_tmp_buffer = volk_gnsssdr::vector<float>(d_fft_size);
+    d_fft_codes = volk_gnsssdr::vector<gr_complex>(d_fft_size);
+    d_input_signal = volk_gnsssdr::vector<gr_complex>(d_fft_size);
 
-    d_fft_if = new fft::fft_complex_fwd(d_fft_size);
-    d_ifft = new gr::fft::fft_complex_rev(d_fft_size);
+    // d_fft_if = new fft::fft_complex_fwd(d_fft_size);
+    // d_ifft = new gr::fft::fft_complex_rev(d_fft_size);
+
+    d_fft_if = gnss_fft_fwd_make_unique(d_fft_size);
+    d_ifft = gnss_fft_rev_make_unique(d_fft_size);
 
     d_worker_active = false;
     d_active = true;
@@ -83,10 +85,10 @@ circular_conv_impl::circular_conv_impl(int code_id, int peak_algo, int code_len,
     d_doppler_center = static_cast<int32_t>((d_freq_stop - d_freq_start)/2);
     d_buffer_count = 0;
 
-    d_data_buffer = vector<gr_complex>(d_consumed_samples);
-    d_magnitude_grid = vector<vector<float>>(d_num_doppler_bins, vector<float>(d_fft_size));
-    d_grid_doppler_wipeoffs = vector<vector<gr_complex>>(d_num_doppler_bins, vector<gr_complex>(d_fft_size));
-    
+    d_data_buffer = volk_gnsssdr::vector<gr_complex>(d_consumed_samples);
+    d_magnitude_grid = volk_gnsssdr::vector<volk_gnsssdr::vector<float>>(d_num_doppler_bins, volk_gnsssdr::vector<float>(d_fft_size));
+    d_grid_doppler_wipeoffs = volk_gnsssdr::vector<volk_gnsssdr::vector<std::complex<float>>>(d_num_doppler_bins, volk_gnsssdr::vector<std::complex<float>>(d_fft_size));   
+
     for (uint32_t doppler_index = 0; doppler_index < d_num_doppler_bins; doppler_index++)
         {
             std::fill(d_magnitude_grid[doppler_index].begin(), d_magnitude_grid[doppler_index].end(), 0.0);
@@ -228,7 +230,7 @@ void circular_conv_impl::generate_sampled_code_fc(gr_complex *dest, int prn)
     
     for (int ii = 0; ii < d_code_len; ++ii)
     {
-        temp_fc_code[ii] = gr_complex(static_cast<float>(code_int[ii]), static_cast<float>(code_int[ii]));
+        temp_fc_code[ii] = gr_complex(static_cast<float>(code_int[ii]), 0.0F);
         cerr << code_int[ii];
     }
     
@@ -502,30 +504,16 @@ int circular_conv_impl::work(int noutput_items,
                              gr_vector_const_void_star& input_items,
                              gr_vector_void_star& output_items)
 {
-    auto in1 = static_cast<const gr_complex*>(input_items[0]);
-    auto out = static_cast<gr_complex*>(output_items[0]);
+    auto in = static_cast<const gr_complex*>(input_items[0]);
+    //auto out = static_cast<gr_complex*>(output_items[0]);
 
     //gr::thread::scoped_lock lk(d_setlock);
 
     //std::copy(in1, in1 + noutput_items, out + noutput_items);
     // consume_each(noutput_items);
-
-    for (int i=0; i < noutput_items; i++)
-        out[i] = in1[i];
-
-    // if (!d_active or d_worker_active)
-    // {
-    //     // do not consume samples while performing a non-coherent integration
-    //     bool consume_samples = ((!d_active) || (d_worker_active));
-    //     if (consume_samples)
-    //         {
-    //             d_sample_counter += static_cast<uint64_t>(noutput_items);
-    //             d_logger->alert("Consuming {}", d_sample_counter);
-    //             consume_each(noutput_items);
-    //         }
-        
-    //     return 0;
-    // }
+    int noutput_items1 = 512;
+   
+    
     switch(d_state)
     {
         case 0:
@@ -533,7 +521,7 @@ int circular_conv_impl::work(int noutput_items,
             // Reset variables
             d_logger->debug("State 0");
             reset_acq_variables();
-            d_sample_counter += static_cast<uint64_t>(noutput_items);  // sample counter
+            d_sample_counter += static_cast<uint64_t>(noutput_items1);  // sample counter
             d_state = 1;
             d_buffer_count = 0U;
             consume_each(noutput_items);
@@ -545,9 +533,9 @@ int circular_conv_impl::work(int noutput_items,
             d_logger->debug("State 1");
             uint32_t buff_increment;
             const auto* in = reinterpret_cast<const gr_complex*>(input_items[0]);  // Get the input samples pointer
-            if ((noutput_items + d_buffer_count) <= d_consumed_samples)
+            if ((noutput_items1 + d_buffer_count) <= d_consumed_samples)
             {
-                buff_increment = noutput_items;
+                buff_increment = noutput_items1;
             }
             else
             {
@@ -557,8 +545,6 @@ int circular_conv_impl::work(int noutput_items,
             //std::copy(in, in + buff_increment, d_data_buffer.begin());
             copy(&in[0], &in[buff_increment], back_inserter(d_data_buffer));
 
-            // for (int i=0; i<buff_increment; i++)
-            //     d_data_buffer.at(i) = (in[i]);
 
             // If buffer will be full in next iteration
             if (d_buffer_count >= d_consumed_samples)
@@ -570,9 +556,9 @@ int circular_conv_impl::work(int noutput_items,
             //d_logger->info("Buffer count: {}", d_data_buffer.size());
             d_sample_counter += static_cast<uint64_t>(buff_increment);
 
-            d_logger->alert("{}: bi {} - dbc {} - noi {} - ddb {}", d_sample_counter, buff_increment, d_buffer_count, noutput_items, d_data_buffer.size());
+            d_logger->alert("{}: bi {} - dbc {} - noi {} - ddb {}", d_sample_counter, buff_increment, d_buffer_count, noutput_items1, d_data_buffer.size());
 
-            //consume_each();
+            consume_each(noutput_items);
             break;
         }
 
@@ -581,7 +567,7 @@ int circular_conv_impl::work(int noutput_items,
             d_logger->debug("State 2");
             acquisition_core(d_sample_counter);
             reset_acq_variables();
-            //consume_each(0);
+            consume_each(0);
             d_buffer_count = 0U;
             break;
         }
@@ -589,7 +575,7 @@ int circular_conv_impl::work(int noutput_items,
     //d_logger->warn("{}", d_sample_counter);
     // Tell runtime system how many output items we produced.
     consume_each(noutput_items);
-    return noutput_items;
+    return 0;
 }
 
 } /* namespace circular_conv */
